@@ -19,24 +19,24 @@ docker run -d --name livemasjid \
 
 This can the be utilized in Home Assistant or similar as a trigger for automations such as when to cast the stream to a device.
 
-1. Run the Docker Container on a device on the same network as your Home Assistant device with the following command:
+1. Add the https://github.com/alexbelgium/hassio-addons repository to Home Assistant and install the `Portainer` add-on. Follow the `Portainer` guide to ensure it is running.
 
-```bash
-docker run -d --name livemasjid \
-  -e MQTT_BROKER="ip of mqtt broker" \
-  -e MQTT_PORT=1883 \
-  -e MQTT_USER="username" \
-  -e MQTT_PASSWORD="password" \
-  -e MASJID_SURL="http://livemasjid.com/cambridge" \
-  -e POLL_INTERVAL=5 \
-  sufyanmotala/livemasjid:latest
+2. Follow the following guide to install and setup the `MQTT Broker` add-on: https://youtu.be/dqTn-Gk4Qeo?si=LuSZHHoVtF8OkdJj
+
+3. Using the Portainer add-on (default username is admin and default password is homeassistant), create a new container by first clicking Live connect and then Containers. Click Add container and use the `sufyanmotala/livemasjid:latest` image. Add the following environment variables:
+
+```
+MQTT_BROKER: ip of mqtt broker # Replace with your MQTT broker IP, usually the IP of your Home Assistant instance
+MQTT_PORT: 1883
+MQTT_USER: username # Replace with your MQTT username
+MQTT_PASSWORD: password # Replace with your MQTT password
+MASJID_SURL: http://livemasjid.com/cambridge # Replace with your masjids stream URL
+POLL_INTERVAL: 5
 ```
 
-2. Install the `Studio Code Server` add-on on Home Assistant.
+4. Install the `Studio Code Server` add-on on Home Assistant.
 
-3. Follow the following guide to install and setup the `MQTT Broker` Add-on: https://youtu.be/dqTn-Gk4Qeo?si=LuSZHHoVtF8OkdJj
-   
-4. Using the Studio Code Server Integration, add the following to your `configuration.yaml` file on Home Assistant:
+5. Using the `Studio Code Server` Integration, add the following to your `configuration.yaml` file on Home Assistant:
 
 ```yaml
 mqtt:
@@ -77,8 +77,8 @@ trigger:
   - platform: state
     entity_id:
       - binary_sensor.livemasjid_stream_status
-    from: "on"
-    to: "off"
+    from: "ON"
+    to: "OFF"
 condition: []
 action:
   - service: media_player.media_stop
