@@ -25,7 +25,7 @@ MASJID_SURL = os.getenv('MASJID_SURL')
 MQTT_TOPIC = 'livemasjid/status'
 MQTT_CLIENT_ID = 'livemasjid'
 
-STATUS_URL = 'https://relay.emasjidlive.uk/quraan'
+STATUS_URL = 'https://www.livemasjid.com/api/get_mountdetail_new.php'
 STREAM_STATUS_GREEN = 'green'
 
 POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
@@ -41,7 +41,13 @@ class LiveMasjid:
             response = requests.get(STATUS_URL)
             if response.status_code != 200:
                 return False
-            return True
+
+            status = response.json()
+            mounts = status.get('mounts', [])
+            for mount in mounts:
+                if mount.get('surl') == self.masjid_surl:
+                    return mount.get("sstatus", "red") == STREAM_STATUS_GREEN
+            return False
         except requests.exceptions.RequestException as e:
             print(f"HTTP Request failed: {e}")
             return False
