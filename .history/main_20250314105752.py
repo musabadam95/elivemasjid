@@ -26,8 +26,10 @@ MQTT_TOPIC = 'livemasjid/status'
 MQTT_CLIENT_ID = 'livemasjid'
 
 STATUS_URL = os.getenv('MASJID_SURL')
+STREAM_STATUS_GREEN = 'green'
 
 POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
+
 
 class LiveMasjid:
 
@@ -36,15 +38,12 @@ class LiveMasjid:
 
     def get_stream_status(self):
         try:
-            print(STATUS_URL)
-            response = requests.get(STATUS_URL,stream=True, timeout=(0.5))
+            response = requests.get(STATUS_URL)
             if response.status_code != 200:
-                print("False")
                 return False
-            print("True")
             return True
-        except requests.exceptions.Timeout:
-            print("HTTP Request failed")
+        except requests.exceptions.RequestException as e:
+            print(f"HTTP Request failed: {e}")
             return False
 
     def connect_mqtt(self):
@@ -64,15 +63,12 @@ class LiveMasjid:
         return client
 
     def publish(self, client, status):
-        print(f"Publishing status to MQTT Broker: {'ON' if status else 'OFF'}")
         client.publish(MQTT_TOPIC, "ON" if status else "OFF")
 
     def run(self):
-        print("Starting LiveMasjid MQTT Publisher")
         client = self.connect_mqtt()
         client.loop_start()
         while True:
-            print("Polling stream status")
             status = self.get_stream_status()
             print(f"Stream status: {'ON' if status else 'OFF'}")
             self.publish(client, status)
