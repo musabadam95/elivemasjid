@@ -11,24 +11,31 @@ required_env_vars = [
     'MQTT_PASSWORD',
     'MASJID_SURL'
 ]
-missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-if missing_vars:
-    print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
-    sys.exit(1)
+# missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+# if missing_vars:
+#     print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
+#     sys.exit(1)
+
+# MQTT_BROKER = os.getenv('MQTT_BROKER')
+# MQTT_PORT = int(os.getenv('MQTT_PORT'))
+# MQTT_USER = os.getenv('MQTT_USER')
+# MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
+# MASJID_SURL = os.getenv('MASJID_SURL')
+
 
 MQTT_BROKER = os.getenv('MQTT_BROKER')
-MQTT_PORT = int(os.getenv('MQTT_PORT'))
+MQTT_PORT = 1234
 MQTT_USER = os.getenv('MQTT_USER')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 MASJID_SURL = os.getenv('MASJID_SURL')
 
-
 MQTT_TOPIC = 'elivemasjid/status'
 MQTT_CLIENT_ID = 'elivemasjid'
 
-STATUS_URL = "https://emasjidlive.co.uk/listen/"+ MASJID_SURL
+STATUS_URL = "https://emasjidlive.co.uk/listen/qislondon"
 
-POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
+POLL_INTERVAL = int(5)
+
 class LiveMasjid:
 
     def __init__(self, masjid_surl):

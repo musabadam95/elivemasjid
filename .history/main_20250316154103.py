@@ -28,7 +28,8 @@ MQTT_CLIENT_ID = 'elivemasjid'
 
 STATUS_URL = "https://emasjidlive.co.uk/listen/"+ MASJID_SURL
 
-POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
+POLL_INTERVAL = int(5)
+
 class LiveMasjid:
 
     def __init__(self, masjid_surl):

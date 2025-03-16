@@ -22,13 +22,13 @@ MQTT_USER = os.getenv('MQTT_USER')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 MASJID_SURL = os.getenv('MASJID_SURL')
 
-
 MQTT_TOPIC = 'elivemasjid/status'
 MQTT_CLIENT_ID = 'elivemasjid'
 
-STATUS_URL = "https://emasjidlive.co.uk/listen/"+ MASJID_SURL
+STATUS_URL = os.getenv('MASJID_SURL')
 
 POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
+
 class LiveMasjid:
 
     def __init__(self, masjid_surl):
@@ -37,19 +37,13 @@ class LiveMasjid:
     def get_stream_status(self):
         try:
             print(STATUS_URL)
-            response = requests.get(STATUS_URL, timeout=(0.5))
-            responseText = response.text
-            if "Stream Currently Offline" in responseText or response.status_code != 200:
-                print("Stream Currently Offline")
-                if response.status_code != 200:
-                    print(response.status_code, "Connection Error")
+            response = requests.get(STATUS_URL,stream=True, timeout=(0.5))
+            print(response)
+            if response.status_code != 200:
+                print("False")
                 return False
-            elif response.status_code == 200:
-                print("Stream Currently Online")
-                return True
-            else:
-                print("Unable to determine status")
-                return False
+            print("True")
+            return True
         except requests.exceptions.Timeout:
             print("HTTP Request failed")
             return False
