@@ -50,7 +50,7 @@ class LiveMasjid:
             else:
                 print("Unable to determine status")
                 return False
-        except requests.exceptions.Timeout:
+        except requests.exceptions:
             print("HTTP Request failed")
             return False
 
