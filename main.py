@@ -3,6 +3,7 @@ import sys
 from time import sleep
 import requests
 import paho.mqtt.client as mqtt
+import re
 
 required_env_vars = [
     'MQTT_BROKER',
@@ -29,6 +30,7 @@ MQTT_CLIENT_ID = 'elivemasjid'
 STATUS_URL = "https://emasjidlive.co.uk/listen/"+ MASJID_SURL
 
 POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
+regex_pattern = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
 class LiveMasjid:
 
     def __init__(self, masjid_surl):
@@ -45,6 +47,17 @@ class LiveMasjid:
                     print(response.status_code, "Connection Error")
                 return False
             elif response.status_code == 200:
+                print(responseText.find("https://relay.emasjidlive.uk/colchestermosque?"))
+                match = re.search(regex_pattern, url)
+                if match:
+                    # Extract values by their group names
+                    token_value = match.group('token')
+                    expiry_value = match.group('expires')
+                    
+                    print(f"Token:   {token_value}")
+                    print(f"Expires: {expiry_value}")
+                else:
+                    print("No match found. Check if the URL format has changed.")
                 print("Stream Currently Online")
                 return True
             else:
