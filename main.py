@@ -65,7 +65,7 @@ class LiveMasjid:
             elif response.status_code == 200:
                 print("Stream Currently Online")
                 
-                return extract_and_cast(responseText)
+                return self.extract_and_cast(responseText)
             else:
                 print("Unable to determine status")
                 return False
