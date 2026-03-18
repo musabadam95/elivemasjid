@@ -47,10 +47,10 @@ class LiveMasjid:
                 print(f"New expiry {current_expires}. ")
                 # 3. Prepare the Home Assistant API Call
                 last_token = current_token # Update our tracker
-                return RELAY_URL + f"?token={current_token}&expires={current_expires}"                
+                return RELAY_URL + f"token={current_token}&expires={current_expires}"                
             else:
                 print("Token hasn't changed. Skipping update.")
-                return RELAY_URL + f"?token={last_token}&expires={current_expires}"                
+                return RELAY_URL + f"token={last_token}&expires={current_expires}"                
         else:
             print("Could not find a valid token in the source string.")
     def get_stream_status(self):
