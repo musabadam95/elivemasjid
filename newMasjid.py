@@ -1,5 +1,4 @@
 HA_URL = "http://192.168.0.86:8123" 
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI5OWUxZmIzNTA4YjU0NTY4ODlhNTczNzA2MjIwNjZhMCIsImlhdCI6MTc3Mzg1MTUxMSwiZXhwIjoyMDg5>
 ENTITY_ID = "media_player.living_room_display"
 STATUS_URL= "https://emasjidlive.co.uk/listen/leytonstonemasjid"
 # The source where you get the URL (e.g., a website or log file)
@@ -11,16 +10,12 @@ last_token = None
 
 def extract_and_cast(rawSource):
     global last_token
-    
-    # 1. Extraction using Regex
-    # This looks for the token and the expiry digits
     regex_pattern = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
     match = re.search(regex_pattern,rawSource )
     
     if match:
         current_token = match.group('token')
         current_expires= match.group('expires')
-        # 2. Check if the token is new
         if current_token != last_token:
             print(f"New token detected: {current_token}. Updating stream...")
             print(f"New expiry {current_expires}. ")
@@ -29,7 +24,6 @@ def extract_and_cast(rawSource):
                 "Authorization": f"Bearer {TOKEN}",
                 "Content-Type": "application/json",
             }
-            
             payload = {
                 "entity_id": ENTITY_ID,
                 "media_content_id": raw_source_url+f"?token={current_token}&expires={current_expires}", # The full URL
