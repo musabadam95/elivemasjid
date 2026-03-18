@@ -89,8 +89,8 @@ class LiveMasjid:
         return client
 
     def publish(self, client, status):
-        print(f"Publishing status to MQTT Broker: {'ON' if status else 'OFF'}")
-        client.publish(MQTT_TOPIC, "ON" if status else "OFF")
+        print(f"Publishing status to MQTT Broker: {status if status else 'OFF'}")
+        client.publish(MQTT_TOPIC, status if status else "OFF")
 
     def run(self):
         print("Starting LiveMasjid MQTT Publisher")
@@ -100,7 +100,7 @@ class LiveMasjid:
             print("Polling stream status")
             status = self.get_stream_status()
             print(status)
-            print(f"Stream status: {'ON' if status else 'OFF'}")
+            print(f"Stream status: {status if status else 'OFF'}")
             self.publish(client, status)
             print(f"Published status to MQTT Broker")
             print(f"Sleeping for {POLL_INTERVAL} seconds\n")
