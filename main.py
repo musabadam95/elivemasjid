@@ -25,10 +25,11 @@ MASJID_SURL = os.getenv('MASJID_SURL')
 
 
 MQTT_TOPIC = 'elivemasjid/status'
+MQTT_TOPIC_CAST = 'castingUrl'
 MQTT_CLIENT_ID = 'elivemasjid'
 
 STATUS_URL = "https://emasjidlive.co.uk/listen/"+ MASJID_SURL
-
+RELAY_URL = "https://relay.emasjidlive.uk/leytonstonemasjid?"
 POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
 regex_pattern = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
 class LiveMasjid:
@@ -48,7 +49,7 @@ class LiveMasjid:
                 return False
             elif response.status_code == 200:
                 print(responseText.find("https://relay.emasjidlive.uk/colchestermosque?"))
-                match = re.search(regex_pattern, url)
+                match = re.search(regex_pattern, responseText)
                 if match:
                     # Extract values by their group names
                     token_value = match.group('token')
