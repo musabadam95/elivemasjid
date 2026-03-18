@@ -43,9 +43,6 @@ class LiveMasjid:
             current_token = match.group('token')
             current_expires = match.group('expires')
             if current_token != last_token:
-                print(f"New token detected: {current_token}. Updating stream...")
-                print(f"New expiry {current_expires}. ")
-                # 3. Prepare the Home Assistant API Call
                 last_token = current_token # Update our tracker
                 return RELAY_URL + f"token={current_token}&expires={current_expires}"                
             else:
@@ -59,7 +56,6 @@ class LiveMasjid:
             response = requests.get(STATUS_URL, timeout=(0.5))
             responseText = response.text
             if "Stream Currently Offline" in responseText or response.status_code != 200:
-                print("Stream Currently Offline")
                 if response.status_code != 200:
                     print(response.status_code, "Connection Error")
                 return False
@@ -96,13 +92,11 @@ class LiveMasjid:
         print("Starting LiveMasjid MQTT Publisher")
         client = self.connect_mqtt()
         client.loop_start()
+        # We initialise status with OFF first before checking
+        self.publish(client,'OFF')
         while True:
-            print("Polling stream status")
             status = self.get_stream_status()
-            print(status)
-            print(f"Stream status: {status if status else 'OFF'}")
             self.publish(client, status)
-            print(f"Published status to MQTT Broker")
             print(f"Sleeping for {POLL_INTERVAL} seconds\n")
             sleep(POLL_INTERVAL)
 
