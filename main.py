@@ -37,6 +37,7 @@ class LiveMasjid:
         self.masjid_surl = masjid_surl
         
     def extract_and_cast(self, rawSource):
+        global last_token
         match = re.search(regex_pattern, rawSource )
         if match:
             current_token = match.group('token')
