@@ -29,7 +29,7 @@ STATUS_URL = f"https://emasjidlive.co.uk/listen/{MASJID_SURL}"
 RELAY_URL = f"https://relay.emasjidlive.uk/{MASJID_SURL}?"
 POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
 regex_pattern = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
-last_token = None
+last_token = ""
 
 class LiveMasjid:
 
