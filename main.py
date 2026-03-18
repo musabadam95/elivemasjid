@@ -25,18 +25,33 @@ MASJID_SURL = os.getenv('MASJID_SURL')
 
 
 MQTT_TOPIC = 'elivemasjid/status'
-MQTT_TOPIC_CAST = 'castingUrl'
 MQTT_CLIENT_ID = 'elivemasjid'
 
-STATUS_URL = "https://emasjidlive.co.uk/listen/"+ MASJID_SURL
-RELAY_URL = "https://relay.emasjidlive.uk/leytonstonemasjid?"
+STATUS_URL = f"https://emasjidlive.co.uk/listen/{MASJID_SURL}"
+RELAY_URL = f"https://relay.emasjidlive.uk/{MASJID_SURL}?"
 POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
 regex_pattern = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
 class LiveMasjid:
 
     def __init__(self, masjid_surl):
         self.masjid_surl = masjid_surl
-
+        
+    def extract_and_cast(rawSource):
+        global last_token
+        match = re.search(regex_pattern,rawSource )
+        if match:
+            current_token = match.group('token')
+            current_expires= match.group('expires')
+            if current_token != last_token:
+                print(f"New token detected: {current_token}. Updating stream...")
+                print(f"New expiry {current_expires}. ")
+                # 3. Prepare the Home Assistant API Call
+                last_token = current_token # Update our tracker
+                return raw_source_url+f"?token={current_token}&expires={current_expires}"                
+            else:
+                print("Token hasn't changed. Skipping update.")
+        else:
+            print("Could not find a valid token in the source string.")
     def get_stream_status(self):
         try:
             print(STATUS_URL)
@@ -48,19 +63,9 @@ class LiveMasjid:
                     print(response.status_code, "Connection Error")
                 return False
             elif response.status_code == 200:
-                print(responseText.find("https://relay.emasjidlive.uk/colchestermosque?"))
-                match = re.search(regex_pattern, responseText)
-                if match:
-                    # Extract values by their group names
-                    token_value = match.group('token')
-                    expiry_value = match.group('expires')
-                    
-                    print(f"Token:   {token_value}")
-                    print(f"Expires: {expiry_value}")
-                else:
-                    print("No match found. Check if the URL format has changed.")
                 print("Stream Currently Online")
-                return True
+                
+                return extract_and_cast(responseText)
             else:
                 print("Unable to determine status")
                 return False
@@ -75,7 +80,6 @@ class LiveMasjid:
         client = mqtt.Client(client_id=MQTT_CLIENT_ID)
         client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
         client.on_connect = on_connect
-
         try:
             client.connect(MQTT_BROKER, MQTT_PORT)
         except Exception as e:
@@ -95,6 +99,7 @@ class LiveMasjid:
         while True:
             print("Polling stream status")
             status = self.get_stream_status()
+            print(status)
             print(f"Stream status: {'ON' if status else 'OFF'}")
             self.publish(client, status)
             print(f"Published status to MQTT Broker")
