@@ -87,7 +87,7 @@ class LiveMasjid:
 
     def publish(self, client, status):
         print(f"Publishing status to MQTT Broker: {status if status else 'OFF'}")
-        payload = json.dumps({"status": "ON", "URL": status}) if status else "OFF"
+        payload = json.dumps({"status": "ON", "URL": status}) if status else JSON.dumps({"status":"OFF"})
         client.publish(MQTT_TOPIC, payload)
 
     def run(self):
