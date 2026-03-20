@@ -4,6 +4,7 @@ from time import sleep
 import requests
 import paho.mqtt.client as mqtt
 import re
+import json
 
 required_env_vars = [
     'MQTT_BROKER',
