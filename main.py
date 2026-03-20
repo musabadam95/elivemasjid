@@ -86,7 +86,7 @@ class LiveMasjid:
 
     def publish(self, client, status):
         print(f"Publishing status to MQTT Broker: {status if status else 'OFF'}")
-        client.publish(MQTT_TOPIC, status if status else "OFF")
+        client.publish(MQTT_TOPIC, {"status":"ON","URL":status} if status else "OFF")
 
     def run(self):
         print("Starting LiveMasjid MQTT Publisher")
