@@ -95,7 +95,7 @@ class LiveMasjid:
         client = self.connect_mqtt()
         client.loop_start()
         # We initialise status with OFF first before checking
-        self.publish(client,'OFF')
+        self.publish(client,JSON.dumps({"status":"OFF"}))
         while True:
             status = self.get_stream_status()
             self.publish(client, status)
