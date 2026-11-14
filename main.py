@@ -17,7 +17,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 REQUIRED_ENV_VARS = [
-    'HOST_IP',
     'MQTT_PORT',
     'MQTT_USER',
     'MQTT_PASSWORD',
@@ -27,7 +26,6 @@ REQUIRED_ENV_VARS = [
     'HA_PORT',
     'HA_TOKEN',
     'HA_MEDIA_PLAYER',
-    'CAST_PROXY_URL'
 ]
 missing_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
 if missing_vars:
@@ -45,7 +43,7 @@ POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
 HA_URL = f"http://{os.getenv('HOST_IP')}:{os.getenv('HA_PORT')}"
 HA_TOKEN = os.getenv('HA_TOKEN')
 HA_MEDIA_PLAYER = os.getenv('HA_MEDIA_PLAYER')
-CAST_PROXY_URL = os.getenv('HOST_IP')+':8000/stream'
+CAST_PROXY_URL = f"http://{os.getenv('HOST_IP')}:{os.getenv('CAST_PROXY_PORT', '8000')}/stream"
 CAST_PROXY_PORT = int(os.getenv('CAST_PROXY_PORT', '8000'))
 RELAY_USER_AGENT = os.getenv(
     'RELAY_USER_AGENT',
@@ -173,7 +171,7 @@ class LiveMasjid:
                         "metadata": {
                             "title": "LiveMasjid Stream",
                             "source": "LiveMasjid",
-                            "artwork": f"http://{HA_URL}/local/quwwat-ul-Islam.jpg"
+                            "artwork": f"{HA_URL}/local/quwwat-ul-Islam.jpg"
                      }
                 }
                 }
