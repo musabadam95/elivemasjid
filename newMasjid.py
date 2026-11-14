@@ -1,55 +1,108 @@
-HA_URL = "http://192.168.0.86:8123" 
-ENTITY_ID = "media_player.living_room_display"
-STATUS_URL= "https://emasjidlive.co.uk/listen/leytonstonemasjid"
-# The source where you get the URL (e.g., a website or log file)
-# Replace this with the logic that fetches the raw text/URL
-raw_source_url = "https://relay.emasjidlive.uk/leytonstonemasjid"
+import os
+import sys
+from time import sleep
+import requests
+import paho.mqtt.client as mqtt
+import re
+import json
 
-# Global variable to track the last used token
-last_token = None
+required_env_vars = [
+    'MQTT_BROKER',
+    'MQTT_PORT',
+    'MQTT_USER',
+    'MQTT_PASSWORD',
+    'MASJID_SURL',
+    'POLL_INTERVAL'
+]
+missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+if missing_vars:
+    print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
+    sys.exit(1)
 
-def extract_and_cast(rawSource):
-    global last_token
-    regex_pattern = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
-    match = re.search(regex_pattern,rawSource )
-    
-    if match:
-        current_token = match.group('token')
-        current_expires= match.group('expires')
-        if current_token != last_token:
-            print(f"New token detected: {current_token}. Updating stream...")
-            print(f"New expiry {current_expires}. ")
-            # 3. Prepare the Home Assistant API Call
-            headers = {
-                "Authorization": f"Bearer {TOKEN}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "entity_id": ENTITY_ID,
-                "media_content_id": raw_source_url+f"?token={current_token}&expires={current_expires}", # The full URL
-                "media_content_type": "url"
-            }
-            
-            endpoint = f"{HA_URL}/api/services/media_player/play_media"
-            
-            try:
-                response = requests.post(endpoint, headers=headers, data=json.dumps(payload))
-                if response.status_code == 200:
-                    print("Successfully updated Home Assistant.")
-                    last_token = current_token # Update our tracker
-                else:
-                    print(f"HA Error: {response.status_code} - {response.text}")
-            except Exception as e:
-                print(f"Connection failed: {e}")
+MQTT_BROKER = os.getenv('MQTT_BROKER')
+MQTT_PORT = int(os.getenv('MQTT_PORT'))
+MQTT_USER = os.getenv('MQTT_USER')
+MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
+MASJID_SURL = os.getenv('MASJID_SURL')
+MQTT_TOPIC = 'elivemasjid/status'
+MQTT_CLIENT_ID = 'elivemasjid'
+STATUS_URL = f"https://emasjidlive.co.uk/listen/{MASJID_SURL}"
+RELAY_URL = f"https://relay.emasjidlive.uk/{MASJID_SURL}?"
+POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
+regex_pattern = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
+last_token = ""
+
+class LiveMasjid:
+
+    def __init__(self, masjid_surl):
+        self.masjid_surl = masjid_surl
+        
+    def extract_and_cast(self, rawSource):
+        global last_token
+        match = re.search(regex_pattern, rawSource )
+        if match:
+            current_token = match.group('token')
+            current_expires = match.group('expires')
+            if current_token != last_token:
+                last_token = current_token # Update our tracker
+                return RELAY_URL + f"token={current_token}&expires={current_expires}"                
+            else:
+                print("Token hasn't changed. Skipping update.")
+                return RELAY_URL + f"token={last_token}&expires={current_expires}"                
         else:
-            print("Token hasn't changed. Skipping update.")
-    else:
-        print("Could not find a valid token in the source string.")
+            print("Could not find a valid token in the source string.")
+    def get_stream_status(self):
+        try:
+            print(STATUS_URL)
+            response = requests.get(STATUS_URL, timeout=(0.5))
+            responseText = response.text
+            if "Stream Currently Offline" in responseText or response.status_code != 200:
+                if response.status_code != 200:
+                    print(response.status_code, "Connection Error")
+                return False
+            elif response.status_code == 200:
+                print("Stream Currently Online")
+                return self.extract_and_cast(responseText)
+            else:
+                print("Unable to determine status")
+                return False
+        except requests.exceptions.RequestException as e:
+            print("HTTP Request failed")
+            return False
 
-# Run the script
-if __name__ == "__main__":
-    response = requests.get(STATUS_URL, timeout=(0.5))
-    responseText = response.text
+    def connect_mqtt(self):
+        def on_connect(client, userdata, flags, rc):
+            print("Connected to MQTT Broker!" if rc == 0 else f"Failed to connect, return code {rc}\n")
 
-^G Help          ^O Write Out     ^W Where Is      ^K Cut           ^T Execute       ^C Location      M-U Undo         M-A Set Mark
-^X Exit          ^R Read File     ^\ Replace       ^U Paste         ^J Justify       ^/ Go To Line    M-E Redo         M-6 Copy
+        client = mqtt.Client(client_id=MQTT_CLIENT_ID)
+        client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+        client.on_connect = on_connect
+        try:
+            print(client.connect(MQTT_BROKER, MQTT_PORT))
+        except Exception as e:
+            print(f"MQTT Connection failed: {e}")
+            sys.exit(1)
+
+        return client
+
+    def publish(self, client, status):
+        print(f"Publishing status to MQTT Broker: {status if status else 'OFF'}")
+        payload = json.dumps({"status": "ON", "url": status}) if status else json.dumps({"status":"OFF"})
+        client.publish(MQTT_TOPIC, payload)
+
+    def run(self):
+        print("Starting LiveMasjid MQTT Publisher")
+        client = self.connect_mqtt()
+        client.loop_start()
+        # We initialise status with OFF first before checking
+        print(self.publish(client,json.dumps({"status":"OFF"})))
+        while True:
+            status = self.get_stream_status()
+            self.publish(client, status)
+            print(f"Sleeping for {POLL_INTERVAL} seconds\n")
+            sleep(POLL_INTERVAL)
+
+
+if __name__ == '__main__':
+    live_masjid = LiveMasjid(MASJID_SURL)
+    live_masjid.run()
