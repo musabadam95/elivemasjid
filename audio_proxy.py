@@ -1,8 +1,11 @@
+import logging
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 class AudioProxyServer:
@@ -30,6 +33,7 @@ class AudioProxyServer:
                 with owner._lock:
                     stream_url = owner._stream_url
                 if not stream_url:
+                    logger.warning("Rejected audio request because the stream is offline")
                     self.send_error(503, "Stream is offline")
                     return
 
@@ -51,6 +55,7 @@ class AudioProxyServer:
                         timeout=(10, None)
                     )
                     if response.status_code >= 400:
+                        logger.error("Relay returned HTTP %s", response.status_code)
                         self.send_error(response.status_code)
                         return
 
@@ -64,22 +69,28 @@ class AudioProxyServer:
                             self.send_header(header, value)
                     self.send_header("Connection", "close")
                     self.end_headers()
+                    logger.info(
+                        "Proxying audio to %s (HTTP %s, content type: %s)",
+                        self.client_address[0],
+                        response.status_code,
+                        response.headers.get("Content-Type", "unknown")
+                    )
 
                     if not head_only:
                         for chunk in response.iter_content(chunk_size=16 * 1024):
                             if chunk:
                                 self.wfile.write(chunk)
                 except (BrokenPipeError, ConnectionResetError):
-                    pass
+                    logger.debug("Audio client %s disconnected", self.client_address[0])
                 except requests.exceptions.RequestException as error:
-                    print(f"Audio relay request failed: {error}")
+                    logger.error("Audio relay request failed (%s)", type(error).__name__)
                 finally:
                     if response is not None:
                         response.close()
                     self.close_connection = True
 
             def log_message(self, format, *args):
-                print(f"Audio proxy: {format % args}")
+                logger.info("Audio proxy request from %s: %s", self.client_address[0], format % args)
 
         self._server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
         self._server.daemon_threads = True
@@ -91,4 +102,4 @@ class AudioProxyServer:
 
     def start(self):
         self._thread.start()
-        print(f"Audio proxy listening on port {self.port}")
+        logger.info("Audio proxy listening on port %s", self.port)

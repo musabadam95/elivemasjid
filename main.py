@@ -1,11 +1,18 @@
 import os
 import sys
+import logging
 from time import sleep
 import requests
 import paho.mqtt.client as mqtt
 import re
 import json
 from audio_proxy import AudioProxyServer
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 required_env_vars = [
     'MQTT_BROKER',
@@ -21,7 +28,7 @@ required_env_vars = [
 ]
 missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 if missing_vars:
-    print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
+    logger.critical("Missing required environment variables: %s", ", ".join(missing_vars))
     sys.exit(1)
 
 MQTT_BROKER = os.getenv('MQTT_BROKER')
@@ -62,15 +69,17 @@ class LiveMasjid:
             current_expires = match.group('expires')
             if current_token != last_token:
                 last_token = current_token # Update our tracker
-                return RELAY_URL + f"token={current_token}&expires={current_expires}"                
+                logger.info("Found a new relay token; refreshing the proxy stream")
+                return RELAY_URL + f"token={current_token}&expires={current_expires}"
             else:
-                print("Token hasn't changed. Skipping update.")
-                return RELAY_URL + f"token={last_token}&expires={current_expires}"                
+                logger.debug("Relay token is unchanged")
+                return RELAY_URL + f"token={last_token}&expires={current_expires}"
         else:
-            print("Could not find a valid token in the source string.")
+            logger.error("Stream page did not contain a valid relay token")
+
     def get_stream_status(self):
         try:
-            print(STATUS_URL)
+            logger.debug("Checking stream status")
             response = requests.get(
                 STATUS_URL,
                 headers={"User-Agent": RELAY_USER_AGENT},
@@ -79,37 +88,46 @@ class LiveMasjid:
             responseText = response.text
             if "Stream Currently Offline" in responseText or response.status_code != 200:
                 if response.status_code != 200:
-                    print(response.status_code, "Connection Error")
+                    logger.warning("Stream status check returned HTTP %s", response.status_code)
                 return False
             elif response.status_code == 200:
-                print("Stream Currently Online")
                 return self.extract_and_cast(responseText)
             else:
-                print("Unable to determine status")
+                logger.warning("Unable to determine stream status")
                 return False
-        except requests.exceptions.RequestException as e:
-            print("HTTP Request failed")
+        except requests.exceptions.RequestException as error:
+            logger.warning("Stream status request failed (%s)", type(error).__name__)
             return False
 
     def connect_mqtt(self):
         def on_connect(client, userdata, flags, rc):
-            print("Connected to MQTT Broker!" if rc == 0 else f"Failed to connect, return code {rc}\n")
+            if rc == 0:
+                logger.info("Connected to MQTT broker")
+            else:
+                logger.error("MQTT broker connection failed with return code %s", rc)
 
         client = mqtt.Client(client_id=MQTT_CLIENT_ID)
         client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
         client.on_connect = on_connect
         try:
-            print(client.connect(MQTT_BROKER, MQTT_PORT))
-        except Exception as e:
-            print(f"MQTT Connection failed: {e}")
+            client.connect(MQTT_BROKER, MQTT_PORT)
+        except Exception:
+            logger.exception("Could not connect to MQTT broker at %s:%s", MQTT_BROKER, MQTT_PORT)
             sys.exit(1)
 
         return client
 
     def publish(self, client, status):
-        print(f"Publishing status to MQTT Broker: {status if status else 'OFF'}")
+        state = "ON" if status else "OFF"
         payload = json.dumps({"status": "ON", "url": status}) if status else json.dumps({"status":"OFF"})
-        client.publish(MQTT_TOPIC, payload)
+        try:
+            result = client.publish(MQTT_TOPIC, payload)
+            if result.rc != mqtt.MQTT_ERR_SUCCESS:
+                logger.error("MQTT publish failed with return code %s", result.rc)
+            else:
+                logger.debug("Published stream status %s to MQTT topic %s", state, MQTT_TOPIC)
+        except Exception:
+            logger.exception("Could not publish stream status to MQTT")
 
     def call_home_assistant(self, service, data):
         try:
@@ -120,14 +138,23 @@ class LiveMasjid:
                 timeout=10
             )
             response.raise_for_status()
+            logger.info("Home Assistant %s request succeeded for %s", service, HA_MEDIA_PLAYER)
             return True
-        except requests.exceptions.RequestException as e:
-            print(f"Home Assistant {service} request failed: {e}")
+        except requests.exceptions.HTTPError as error:
+            logger.error(
+                "Home Assistant %s request failed with HTTP %s",
+                service,
+                error.response.status_code
+            )
+            return False
+        except requests.exceptions.RequestException as error:
+            logger.error("Home Assistant %s request failed (%s)", service, type(error).__name__)
             return False
 
     def update_cast(self, stream_url):
         self.audio_proxy.set_stream_url(stream_url)
         if stream_url and not self.current_media_url:
+            logger.info("Starting playback on %s using the audio proxy", HA_MEDIA_PLAYER)
             started = self.call_home_assistant(
                 "play_media",
                 {
@@ -138,28 +165,44 @@ class LiveMasjid:
             )
             if started:
                 self.current_media_url = CAST_PROXY_URL
-                print(f"Started casting to {HA_MEDIA_PLAYER}")
+            else:
+                logger.error("Could not start playback on %s", HA_MEDIA_PLAYER)
         elif not stream_url and self.current_media_url:
+            logger.info("Stopping playback on %s because the stream is offline", HA_MEDIA_PLAYER)
             stopped = self.call_home_assistant(
                 "media_stop",
                 {"entity_id": HA_MEDIA_PLAYER}
             )
             if stopped:
                 self.current_media_url = None
-                print(f"Stopped casting to {HA_MEDIA_PLAYER}")
+            else:
+                logger.error("Could not stop playback on %s", HA_MEDIA_PLAYER)
 
     def run(self):
-        print("Starting LiveMasjid MQTT Publisher and Home Assistant casting")
+        logger.info("Starting LiveMasjid MQTT publisher and Home Assistant casting")
+        logger.info("Polling stream status every %s seconds", POLL_INTERVAL)
+        logger.info(
+            "Casting target: %s; proxy URL: %s",
+            HA_MEDIA_PLAYER,
+            CAST_PROXY_URL
+        )
         self.audio_proxy.start()
         client = self.connect_mqtt()
         client.loop_start()
         self.publish(client, False)
-        while True:
-            status = self.get_stream_status()
-            self.publish(client, status)
-            self.update_cast(status)
-            print(f"Sleeping for {POLL_INTERVAL} seconds\n")
-            sleep(POLL_INTERVAL)
+        last_stream_state = None
+        try:
+            while True:
+                status = self.get_stream_status()
+                state = "ON" if status else "OFF"
+                if state != last_stream_state:
+                    logger.info("Stream state changed to %s", state)
+                    last_stream_state = state
+                self.publish(client, status)
+                self.update_cast(status)
+                sleep(POLL_INTERVAL)
+        except KeyboardInterrupt:
+            logger.info("Shutdown requested")
 
 
 if __name__ == '__main__':

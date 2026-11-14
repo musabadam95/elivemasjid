@@ -16,6 +16,7 @@ docker run -d --name livemasjid \
   -e HA_MEDIA_PLAYER="media_player.google_home" \
   -e CAST_PROXY_URL="http://192.168.1.20:8000/stream" \
   -e RELAY_USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" \
+  -e LOG_LEVEL="INFO" \
   -p 8000:8000 \
   -e POLL_INTERVAL=5 \
   sufyanmotala/livemasjid:latest
@@ -28,7 +29,10 @@ requires a specific User-Agent value, set that exact value here. The container
 also continues to publish stream status over MQTT and asks Home Assistant to
 stop playback when the stream goes offline. Create a long-lived access token in
 your Home Assistant profile and use the exact entity ID for your Google Home.
-No Home Assistant play/stop automation is needed for casting.
+No Home Assistant play/stop automation is needed for casting. Logs include
+stream-state changes and MQTT, Home Assistant, and proxy results without
+printing relay or Home Assistant access tokens. Set `LOG_LEVEL=DEBUG` to see
+per-poll status checks and successful MQTT publishes.
 
 ## Home Assistant Example Usage
 
@@ -51,6 +55,7 @@ HA_TOKEN: your_home_assistant_long_lived_access_token
 HA_MEDIA_PLAYER: media_player.google_home # Replace with your Google Home entity ID
 CAST_PROXY_URL: http://192.168.1.20:8000/stream # Docker host LAN IP; publish container port 8000
 RELAY_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+LOG_LEVEL: INFO # Set to DEBUG for detailed polling and MQTT publish logs
 POLL_INTERVAL: 5
 ```
 
