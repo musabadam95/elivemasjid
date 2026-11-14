@@ -45,7 +45,7 @@ POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
 HA_URL = f"http://{os.getenv('HOST_IP')}:{os.getenv('HA_PORT')}"
 HA_TOKEN = os.getenv('HA_TOKEN')
 HA_MEDIA_PLAYER = os.getenv('HA_MEDIA_PLAYER')
-CAST_PROXY_URL = os.getenv('CAST_PROXY_URL')+':8000/stream'
+CAST_PROXY_URL = os.getenv('HOST_IP')+':8000/stream'
 CAST_PROXY_PORT = int(os.getenv('CAST_PROXY_PORT', '8000'))
 RELAY_USER_AGENT = os.getenv(
     'RELAY_USER_AGENT',
