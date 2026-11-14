@@ -1,11 +1,13 @@
-import os
-import sys
-import logging
-from time import sleep
-import requests
-import paho.mqtt.client as mqtt
-import re
 import json
+import logging
+import os
+import re
+import sys
+from time import sleep
+
+import paho.mqtt.client as mqtt
+import requests
+
 from audio_proxy import AudioProxyServer
 
 logging.basicConfig(
@@ -14,66 +16,67 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-required_env_vars = [
-    'MQTT_BROKER',
+REQUIRED_ENV_VARS = [
+    'HOST_IP',
     'MQTT_PORT',
     'MQTT_USER',
     'MQTT_PASSWORD',
     'MASJID_SURL',
+    'HOST_IP',
     'POLL_INTERVAL',
-    'HA_URL',
+    'HA_PORT',
     'HA_TOKEN',
     'HA_MEDIA_PLAYER',
     'CAST_PROXY_URL'
 ]
-missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+missing_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
 if missing_vars:
     logger.critical("Missing required environment variables: %s", ", ".join(missing_vars))
     sys.exit(1)
 
-MQTT_BROKER = os.getenv('MQTT_BROKER')
+HOST_IP = os.getenv('HOST_IP')
 MQTT_PORT = int(os.getenv('MQTT_PORT'))
 MQTT_USER = os.getenv('MQTT_USER')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 MASJID_SURL = os.getenv('MASJID_SURL')
 MQTT_TOPIC = 'elivemasjid/status'
 MQTT_CLIENT_ID = 'elivemasjid'
-STATUS_URL = f"https://emasjidlive.co.uk/listen/{MASJID_SURL}"
-RELAY_URL = f"https://relay.emasjidlive.uk/{MASJID_SURL}?"
 POLL_INTERVAL = int(os.getenv('POLL_INTERVAL'))
-HA_URL = os.getenv('HA_URL').rstrip('/')
+HA_URL = f"http://{os.getenv('HOST_IP')}:{os.getenv('HA_PORT')}"
 HA_TOKEN = os.getenv('HA_TOKEN')
 HA_MEDIA_PLAYER = os.getenv('HA_MEDIA_PLAYER')
-CAST_PROXY_URL = os.getenv('CAST_PROXY_URL')
+CAST_PROXY_URL = os.getenv('CAST_PROXY_URL')+':8000/stream'
 CAST_PROXY_PORT = int(os.getenv('CAST_PROXY_PORT', '8000'))
 RELAY_USER_AGENT = os.getenv(
     'RELAY_USER_AGENT',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
     '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 )
-regex_pattern = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
-last_token = ""
+TOKEN_PATTERN = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
+
 
 class LiveMasjid:
 
     def __init__(self, masjid_surl):
         self.masjid_surl = masjid_surl
+        self.status_url = f"https://emasjidlive.co.uk/listen/{masjid_surl}"
+        self.relay_url = f"https://relay.emasjidlive.uk/{masjid_surl}?"
         self.current_media_url = None
+        self.last_token = ""
         self.audio_proxy = AudioProxyServer(CAST_PROXY_PORT, RELAY_USER_AGENT)
-        
-    def extract_and_cast(self, rawSource):
-        global last_token
-        match = re.search(regex_pattern, rawSource )
+
+    def extract_stream_url(self, raw_source):
+        match = re.search(TOKEN_PATTERN, raw_source)
         if match:
             current_token = match.group('token')
             current_expires = match.group('expires')
-            if current_token != last_token:
-                last_token = current_token # Update our tracker
+            if current_token != self.last_token:
+                self.last_token = current_token
                 logger.info("Found a new relay token; refreshing the proxy stream")
-                return RELAY_URL + f"token={current_token}&expires={current_expires}"
+                return self.relay_url + f"token={current_token}&expires={current_expires}"
             else:
                 logger.debug("Relay token is unchanged")
-                return RELAY_URL + f"token={last_token}&expires={current_expires}"
+                return self.relay_url + f"token={self.last_token}&expires={current_expires}"
         else:
             logger.error("Stream page did not contain a valid relay token")
 
@@ -81,20 +84,15 @@ class LiveMasjid:
         try:
             logger.debug("Checking stream status")
             response = requests.get(
-                STATUS_URL,
+                self.status_url,
                 headers={"User-Agent": RELAY_USER_AGENT},
-                timeout=(0.5)
+                timeout=0.5
             )
-            responseText = response.text
-            if "Stream Currently Offline" in responseText or response.status_code != 200:
+            if "Stream Currently Offline" in response.text or response.status_code != 200:
                 if response.status_code != 200:
                     logger.warning("Stream status check returned HTTP %s", response.status_code)
                 return False
-            elif response.status_code == 200:
-                return self.extract_and_cast(responseText)
-            else:
-                logger.warning("Unable to determine stream status")
-                return False
+            return self.extract_stream_url(response.text)
         except requests.exceptions.RequestException as error:
             logger.warning("Stream status request failed (%s)", type(error).__name__)
             return False
@@ -110,9 +108,9 @@ class LiveMasjid:
         client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
         client.on_connect = on_connect
         try:
-            client.connect(MQTT_BROKER, MQTT_PORT)
+            client.connect(HOST_IP, MQTT_PORT)
         except Exception:
-            logger.exception("Could not connect to MQTT broker at %s:%s", MQTT_BROKER, MQTT_PORT)
+            logger.exception("Could not connect to MQTT broker at %s:%s", HOST_IP, MQTT_PORT)
             sys.exit(1)
 
         return client
@@ -154,13 +152,30 @@ class LiveMasjid:
     def update_cast(self, stream_url):
         self.audio_proxy.set_stream_url(stream_url)
         if stream_url and not self.current_media_url:
+            volume_set = self.call_home_assistant(
+                "volume_set",
+                {
+                    "entity_id": HA_MEDIA_PLAYER,
+                    "volume_level": 0.3
+                }
+            )
+            if not volume_set:
+                logger.warning("Could not set playback volume on %s", HA_MEDIA_PLAYER)
+
             logger.info("Starting playback on %s using the audio proxy", HA_MEDIA_PLAYER)
             started = self.call_home_assistant(
                 "play_media",
                 {
                     "entity_id": HA_MEDIA_PLAYER,
                     "media_content_id": CAST_PROXY_URL,
-                    "media_content_type": "music"
+                    "media_content_type": "music",
+                     "extra":{
+                        "metadata": {
+                            "title": "LiveMasjid Stream",
+                            "source": "LiveMasjid",
+                            "artwork": f"http://{HA_URL}/local/quwwat-ul-Islam.jpg"
+                     }
+                }
                 }
             )
             if started:
@@ -206,5 +221,4 @@ class LiveMasjid:
 
 
 if __name__ == '__main__':
-    live_masjid = LiveMasjid(MASJID_SURL)
-    live_masjid.run()
+    LiveMasjid(MASJID_SURL).run()
