@@ -75,8 +75,8 @@ class LiveMasjid:
             else:
                 logger.debug("Relay token is unchanged")
                 return self.relay_url + f"token={self.last_token}&expires={current_expires}"
-        logger.error("Stream page did not contain a valid relay token")
-        return None
+        else:
+            logger.error("Stream page did not contain a valid relay token")
 
     def get_stream_status(self):
         try:
@@ -86,15 +86,14 @@ class LiveMasjid:
                 headers={"User-Agent": RELAY_USER_AGENT},
                 timeout=0.5
             )
-            if response.status_code != 200:
-                logger.warning("Stream status check returned HTTP %s", response.status_code)
-                return None
-            if "Stream Currently Offline" in response.text:
+            if "Stream Currently Offline" in response.text or response.status_code != 200:
+                if response.status_code != 200:
+                    logger.warning("Stream status check returned HTTP %s", response.status_code)
                 return False
             return self.extract_stream_url(response.text)
         except requests.exceptions.RequestException as error:
             logger.warning("Stream status request failed (%s)", type(error).__name__)
-            return None
+            return False
 
     def connect_mqtt(self):
         def on_connect(client, userdata, flags, rc):
@@ -149,10 +148,6 @@ class LiveMasjid:
             return False
 
     def update_cast(self, stream_url):
-        if stream_url is None:
-            logger.debug("Stream status is unknown; leaving playback unchanged")
-            return
-
         self.audio_proxy.set_stream_url(stream_url)
         if stream_url and not self.current_media_url:
             volume_set = self.call_home_assistant(
@@ -173,13 +168,10 @@ class LiveMasjid:
                     "media_content_id": CAST_PROXY_URL,
                     "media_content_type": "music",
                      "extra":{
-                         "stream_type": "LIVE",
-                         "thumb:": f"{HA_URL}/local/quwwat-ul-Islam.jpg",
-                         "metadata": {
+                        "metadata": {
                             "title": "LiveMasjid Stream",
                             "source": "LiveMasjid",
-                            "artwork": f"{HA_URL}/local/quwwat-ul-Islam.jpg",
-                            "metadataType": 3
+                            "artwork": f"{HA_URL}/local/quwwat-ul-Islam.jpg"
                      }
                 }
                 }
@@ -210,15 +202,11 @@ class LiveMasjid:
         self.audio_proxy.start()
         client = self.connect_mqtt()
         client.loop_start()
+        self.publish(client, False)
         last_stream_state = None
         try:
             while True:
                 status = self.get_stream_status()
-                if status is None:
-                    logger.warning("Stream status is unknown; preserving last confirmed state")
-                    sleep(POLL_INTERVAL)
-                    continue
-
                 state = "ON" if status else "OFF"
                 if state != last_stream_state:
                     logger.info("Stream state changed to %s", state)
