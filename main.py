@@ -174,11 +174,11 @@ class LiveMasjid:
                     "media_content_type": "music",
                      "extra":{
                          "stream_type": "LIVE",
-                         "thumb:": f"{HA_URL}/local/quwwat-ul-Islam.jpg",
+                         "thumb:": f"{HOST_IP}/local/quwwat-ul-Islam.jpg",
                          "metadata": {
                             "title": "LiveMasjid Stream",
                             "source": "LiveMasjid",
-                            "artwork": f"{HA_URL}/local/quwwat-ul-Islam.jpg",
+                            "artwork": f"{HOST_IP}/local/quwwat-ul-Islam.jpg",
                             "metadataType": 3
                      }
                 }
