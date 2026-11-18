@@ -204,7 +204,7 @@ class LiveMasjid:
                 "volume_set",
                 {
                     "entity_id": HA_MEDIA_PLAYER,
-                    "volume_level": 0.3
+                    "volume_level": 0.4
                 }
             )
             if not volume_set:
@@ -219,10 +219,12 @@ class LiveMasjid:
                     "media_content_type": "music",
                      "extra":{
                          "stream_type": "LIVE",
+                         "thumb:": f"{HOST_IP}/local/quwwat-ul-Islam.jpg",
                          "metadata": {
                             "title": "LiveMasjid Stream",
                             "source": "LiveMasjid",
-                            "metadataType": 3
+                            "metadataType": 3,
+                            "artwork": f"{HOST_IP}/local/quwwat-ul-Islam.jpg",
                      }
                 }
                 }
