@@ -217,16 +217,11 @@ class LiveMasjid:
                     "entity_id": HA_MEDIA_PLAYER,
                     "media_content_id": CAST_PROXY_URL,
                     "media_content_type": "music",
-                     "extra":{
-                         "stream_type": "LIVE",
-                         "thumb:": f"{HOST_IP}/local/quwwat-ul-Islam.jpg",
-                         "metadata": {
-                            "title": "LiveMasjid Stream",
-                            "source": "LiveMasjid",
-                            "metadataType": 3,
-                            "artwork": f"{HOST_IP}/local/quwwat-ul-Islam.jpg",
-                     }
-                }
+                    "extra": {
+                        "title": "Leytonstone Mosque Live",
+                        "thumb": f"{HA_URL}/local/quwwat-ul-Islam.jpg",
+                        "stream_type": "LIVE"
+                    }
                 }
             )
             if not started:
