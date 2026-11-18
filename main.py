@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from time import sleep
+from urllib.parse import quote
 
 import paho.mqtt.client as mqtt
 import requests
@@ -59,7 +60,6 @@ class LiveMasjid:
         self.masjid_surl = masjid_surl
         self.status_url = f"https://emasjidlive.co.uk/listen/{masjid_surl}"
         self.relay_url = f"https://relay.emasjidlive.uk/{masjid_surl}?"
-        self.current_media_url = None
         self.last_token = ""
         self.audio_proxy = AudioProxyServer(CAST_PROXY_PORT, RELAY_USER_AGENT)
 
@@ -148,13 +148,51 @@ class LiveMasjid:
             logger.error("Home Assistant %s request failed (%s)", service, type(error).__name__)
             return False
 
+    def get_home_assistant_player_state(self):
+        entity_id = quote(HA_MEDIA_PLAYER, safe="")
+        try:
+            response = requests.get(
+                f"{HA_URL}/api/states/{entity_id}",
+                headers={"Authorization": f"******"},
+                timeout=10
+            )
+            response.raise_for_status()
+            player_state = response.json()
+            if not isinstance(player_state, dict):
+                logger.error("Home Assistant returned an invalid player state response")
+                return None
+            return player_state
+        except requests.exceptions.HTTPError as error:
+            logger.error(
+                "Could not read Home Assistant player state (HTTP %s)",
+                error.response.status_code
+            )
+        except (requests.exceptions.RequestException, ValueError) as error:
+            logger.error(
+                "Could not read Home Assistant player state (%s)",
+                type(error).__name__
+            )
+        return None
+
     def update_cast(self, stream_url):
         if stream_url is None:
             logger.debug("Stream status is unknown; leaving playback unchanged")
             return
 
         self.audio_proxy.set_stream_url(stream_url)
-        if stream_url and not self.current_media_url:
+        player_state = self.get_home_assistant_player_state()
+        if player_state is None:
+            logger.warning("Leaving playback unchanged because the Home Assistant player state is unknown")
+            return
+
+        state = player_state.get("state")
+        attributes = player_state.get("attributes", {})
+        media_content_id = attributes.get("media_content_id") if isinstance(attributes, dict) else None
+        is_our_stream = media_content_id == CAST_PROXY_URL
+
+        if stream_url and is_our_stream:
+            logger.debug("Home Assistant is already playing the LiveMasjid proxy")
+        elif stream_url and state in ("idle", "off"):
             volume_set = self.call_home_assistant(
                 "volume_set",
                 {
@@ -184,18 +222,22 @@ class LiveMasjid:
                 }
                 }
             )
-            if started:
-                self.current_media_url = CAST_PROXY_URL
-            else:
+            if not started:
                 logger.error("Could not start playback on %s", HA_MEDIA_PLAYER)
-        elif not stream_url and self.current_media_url:
+        elif stream_url:
+            logger.info(
+                "Not starting LiveMasjid because %s is already in state %s with other media",
+                HA_MEDIA_PLAYER,
+                state
+            )
+        elif is_our_stream and state in ("playing", "paused", "buffering"):
             logger.info("Stopping playback on %s because the stream is offline", HA_MEDIA_PLAYER)
             stopped = self.call_home_assistant(
                 "media_stop",
                 {"entity_id": HA_MEDIA_PLAYER}
             )
             if stopped:
-                self.current_media_url = None
+                logger.info("Stopped LiveMasjid playback on %s", HA_MEDIA_PLAYER)
             else:
                 logger.error("Could not stop playback on %s", HA_MEDIA_PLAYER)
 
