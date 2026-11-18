@@ -54,6 +54,13 @@ RELAY_USER_AGENT = os.getenv(
 TOKEN_PATTERN = r"token=(?P<token>[^&]+)&expires=(?P<expires>\d+)"
 
 
+def home_assistant_headers():
+    token = HA_TOKEN.strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    return {"Authorization": f"Bearer {token}"}
+
+
 class LiveMasjid:
 
     def __init__(self, masjid_surl):
@@ -153,7 +160,7 @@ class LiveMasjid:
         try:
             response = requests.get(
                 f"{HA_URL}/api/states/{entity_id}",
-                headers={"Authorization": f"******"},
+                headers=home_assistant_headers(),
                 timeout=10
             )
             response.raise_for_status()
