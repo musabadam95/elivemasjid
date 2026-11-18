@@ -46,6 +46,7 @@ HA_TOKEN = os.getenv('HA_TOKEN')
 HA_MEDIA_PLAYER = os.getenv('HA_MEDIA_PLAYER')
 CAST_PROXY_URL = f"http://{os.getenv('HOST_IP')}:{os.getenv('CAST_PROXY_PORT', '8000')}/stream"
 CAST_PROXY_PORT = int(os.getenv('CAST_PROXY_PORT', '8000'))
+CAST_ARTWORK_URL = f"{HA_URL}/local/quwwat-ul-Islam.jpg"
 RELAY_USER_AGENT = os.getenv(
     'RELAY_USER_AGENT',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
@@ -219,8 +220,13 @@ class LiveMasjid:
                     "media_content_type": "music",
                     "extra": {
                         "title": "Leytonstone Mosque Live",
-                        "thumb": f"{HA_URL}/local/quwwat-ul-Islam.jpg",
-                        "stream_type": "LIVE"
+                        "thumb": CAST_ARTWORK_URL,
+                        "stream_type": "LIVE",
+                        "metadata": {
+                            "metadataType": 3,
+                            "title": "Leytonstone Mosque Live",
+                            "images": [{"url": CAST_ARTWORK_URL}]
+                        }
                     }
                 }
             )
